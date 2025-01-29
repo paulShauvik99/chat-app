@@ -1,0 +1,115 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+
+enum Status{
+  PENDING_REQUEST
+  ACCEPTED
+  REJECTED
+}
+
+enum ChatType{
+  DIRECT
+  GROUP
+}
+
+
+model User {
+    id  String  @id @default(uuid()) @map("_id")
+    name  String
+    email  String @unique
+    phone  Int @unique
+    password String
+    friends  Friend[] @relation("FriendsOfUser")
+    friendsOf  Friend[] @relation("FriendOfUsers")
+    groups  GroupUser[] 
+    setting  Setting?
+    chats  ChatUser[]
+    dob  DateTime?
+    profilePic String?
+}
+
+
+model Friend{
+  id String @id @default(uuid()) @map("_id") 
+  userId  String 
+  friendId String
+  status  Status
+  roomId  String?
+  since   DateTime?  @default(now())
+  user  User  @relation("FriendsOfUser" , fields: [userId] , references: [id])  
+  friend User @relation("FriendOfUsers" ,fields: [friendId] , references: [id])
+
+  @@unique([userId , friendId])
+}
+
+model Setting {
+  id  String  @id @default(uuid())  @map("_id") 
+  theme String 
+  user User @relation(fields: [userId] , references: [id])
+  userId String @unique 
+}
+
+model Group{
+  id String   @id @default(uuid())  @map("_id")  
+  members GroupUser[] 
+  roomId String
+  groupName String
+  groupDp String?
+}
+
+
+model GroupUser{
+  id String @id @default(uuid()) @map("_id")
+  userId String
+  groupId String
+
+  user User @relation(fields: [userId] , references: [id])
+  group Group @relation(fields: [groupId] , references: [id])
+
+  @@unique([userId , groupId])
+}
+
+
+model Chat{
+  id String @id @default(uuid()) @map("_id") 
+  roomId String @unique
+  type ChatType
+  users ChatUser[]
+  messages Message[]
+}
+
+
+model ChatUser{
+  id String @id @default(uuid()) @map("_id")
+  chatId String
+  userId String
+
+  user User @relation(fields : [userId] , references: [id])
+  chat Chat @relation(fields : [chatId] , references: [id])
+
+  @@unique([userId , chatId])
+}
+
+model Message{
+  id String @id @default(uuid()) @map("_id") 
+  roomId String
+  senderId String
+  content String
+  timeStamp DateTime @default(now())
+  chat Chat @relation(fields: [chatId] , references: [id])
+  chatId String 
+}
+
