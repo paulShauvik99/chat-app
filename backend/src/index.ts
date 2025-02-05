@@ -177,9 +177,9 @@ async function startChat({ userIds : userIds , senderId : senderId , roomId : ro
             },
             messages : {
                 create : {
-                    roomId : roomId,
                     senderId : senderId,
-                    content : content
+                    content : content,
+                    
                 }
             }
         }
@@ -200,7 +200,6 @@ async function updateChatMessage({ chatId : chatId, senderId : senderId, content
 
     const newMessage = await prisma.message.create({
         data : {
-            chatId : chatId,
             roomId : checkIfExists.roomId,
             senderId : senderId,
             content : content

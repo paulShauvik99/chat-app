@@ -1,12 +1,47 @@
 import { Router } from "express";
 import { userMiddleware } from "../middlewares/middleware";
 import { v4 as uuidv4} from 'uuid'
-import { CreateGroupSchema, FriendsSchema } from "../types";
+import { CreateGroupSchema, DBNewChatType, FriendsSchema, RemoveGroupUser } from "../types";
 import prisma from "../../index"
 
 export const connectionRouter = Router()
 
 connectionRouter.use(userMiddleware)
+
+
+// Initializing the Chat
+const createChat = async ({userIds , roomId , type} : DBNewChatType) =>{
+
+    const checkIfExists = await prisma.chat.findUnique({
+        where : {
+            roomId : roomId
+        }
+    })
+
+    if(checkIfExists){
+        return "Error"
+    }
+
+    try {
+        
+        const newChat = await prisma.chat.create({
+            data : {
+                roomId : roomId,
+                type : type,
+                users : {
+                    create : userIds.map((userId) => ({ 
+                        user : {connect : {id : userId } } 
+                    }))
+                }
+            }
+        })
+        
+        return newChat
+    } catch (error) {
+        console.error
+    }
+}
+
 
 
 connectionRouter.post('/send_request', async (req, res) => {
@@ -110,8 +145,14 @@ connectionRouter.patch('/accept_request', async (req, res) => {
             })
         ])
 
+        const newChat = await createChat( {userIds : [parsedData.data.userId , parsedData.data.friendId]  , roomId : roomId ,  type : "DIRECT" } );
 
-        return res.status(200).json({ success : "Friend Request Accepted"})
+        if(newChat === "Error"){
+            return res.status(402).json({ error : "Chat Exists!"})
+        }
+
+
+        return res.status(200).json({ success : "Friend Request Accepted", chatId : newChat!.id})
 
     } catch (error) {
         return res.status(500).json({ error : "Server Error : " + error })
@@ -169,28 +210,28 @@ connectionRouter.patch('/reject_request', async (req, res) => {
                 }
             })
         ])
-
-
+        
+        
         return res.status(200).json({ success : "Friend Request Rejected"})
-
+        
     } catch (error) {
         return res.status(500).json({ error : "Server Error : " + error })
     }
 })
 
 connectionRouter.post('/create_group', async (req, res) => {
-
+    
     const data = req.body
     const parsedData = CreateGroupSchema.safeParse(data)
     
     if(!parsedData.success) {
         return res.status(401).json({error : "Bad Request"})
     }
-
+    
     try {
-
+        
         const groupRoomId = uuidv4()
-
+        
         await prisma.group.create({
             data : {
                 groupName : parsedData.data.groupName,
@@ -200,18 +241,55 @@ connectionRouter.post('/create_group', async (req, res) => {
                         user : {connect : { id : userId}}
                     }))
                 }
-
+                
             }
         })
+        
 
-        return res.status(201).json({success : "Group created successfully!"})
+        const newGroupChat = await createChat( { userIds : parsedData.data.userIds , roomId : groupRoomId , type : "GROUP"} );
+        if(newGroupChat === "Error") return res.status(402).json({error : "Chat already exists!"})
 
+        return res.status(201).json({success : "Group created successfully!" , groupChatId : newGroupChat!.id })
+        
     } catch (error) {
         return res.status(500).json({error : "Server error :  " + error })   
     }
 })
 
 
+connectionRouter.get('/group_info/:id' , async (req, res) => {
+
+    const { id } = req.params
+    try {
+        const group = await prisma.group.findUnique({
+            where : { id : id },
+            include : {
+                members : {
+                    select : {
+                        user : {
+                            select : {
+                                name : true,
+                                email : true,
+                                phone : true
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        if(!group) {
+            return res.status(404).json({ error : "Group Not Found!"})
+        }
+
+        return res.status(200).json({success : "Group Details Fetched" , members : group.members   })
+
+
+    } catch (error) {
+        return res.status(500).json({error : "server error : " + error })
+    }
+
+})
 
 // -------------- Not Required as Start Chat will be handled by WS Server -------------
 // connectionRouter.post('/start_chat', async (req, res) => {
@@ -258,6 +336,40 @@ connectionRouter.delete('/remove_friend', async (req, res) => {
 })
 
 connectionRouter.delete('/remove_group_user', async (req, res) => {
-    
-})  
+    const data = req.body
+    const parsedData = RemoveGroupUser.safeParse(data)
 
+    if(!parsedData.success) {
+        return res.status(401).json({ error : "Bad Request"})
+    }
+
+    try {
+        const checkIfUserExists = await prisma.groupUser.findUnique({
+            where : {
+                userId_groupId : {
+                    userId : parsedData.data.userId,
+                    groupId : parsedData.data.groupId
+                }
+            }
+        })
+
+        if(!checkIfUserExists){
+            return res.status(401).json({ error : "User Does Not Belongs To The Group"})
+        }
+
+        await prisma.groupUser.delete({
+            where : {
+                userId_groupId : {
+                    userId : parsedData.data.userId,
+                    groupId : parsedData.data.groupId
+                }
+            }
+        })
+
+        return res.status(200).json({success : "User Removed Successfully"})
+
+    } catch (error) {
+        return res.status(500).json({error : "Server Error : " + error})
+    }
+
+})  

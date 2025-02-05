@@ -109,7 +109,6 @@ model Message{
   senderId String
   content String
   timeStamp DateTime @default(now())
-  chat Chat @relation(fields: [chatId] , references: [id])
-  chatId String 
+  chat Chat @relation(fields: [roomId] , references: [roomId])
 }
 

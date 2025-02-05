@@ -43,3 +43,19 @@ export const StartChatSchema = z.object({
 })
 
 export type StartChatType = z.infer<typeof StartChatSchema>
+
+export const RemoveGroupUser = z.object({
+    userId : z.string(),
+    groupId : z.string(),
+    roomId : z.string(),
+})
+
+export type RemoveGroupUserType = z.infer<typeof RemoveGroupUser>
+
+export const DBNewChat = z.object({
+    userIds : z.array(z.string()),
+    roomId : z.string(),
+    type : z.enum(["DIRECT" , "GROUP"]),
+})
+
+export type DBNewChatType = z.infer<typeof DBNewChat>
